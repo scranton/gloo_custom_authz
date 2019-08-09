@@ -1,0 +1,13 @@
+kind: Service
+apiVersion: v1
+metadata:
+  name: auth-server
+  namespace: gloo-system
+spec:
+  selector:
+    app: auth-server
+  ports:
+  - name: grpc
+    protocol: TCP
+    port: 8000
+    targetPort: 8000

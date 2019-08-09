@@ -1,0 +1,12 @@
+apiVersion: skaffold/v1beta13
+kind: Config
+build:
+  artifacts:
+  - image: quay.io/sololabs/auth-server
+    docker:
+      dockerfile: Dockerfile
+  local: {}
+deploy:
+  kubectl:
+    manifests:
+    - k8s/*.yaml
