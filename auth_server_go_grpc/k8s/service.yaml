@@ -1,6 +1,8 @@
 kind: Service
 apiVersion: v1
 metadata:
+  labels:
+    discovery.solo.io/function_discovery: disabled
   name: auth-server
   namespace: gloo-system
 spec:

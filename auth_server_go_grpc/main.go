@@ -19,9 +19,16 @@ import (
 )
 
 const (
-	port            = ":8000"
-	AuthCookieName  = "id_token"
+	port = ":8000"
+
+	AuthCookieName = "id_token"
+
 	extauth_service = "extauth:8080"
+
+	client_id     = "test"
+	client_secret = "bc375223-9270-44dc-901f-0bc1450e3a2e"
+	keycloak_host = "https://keycloak.sololabs.dev"
+	realm_name    = "k8s"
 )
 
 type server struct {
@@ -35,14 +42,6 @@ func (s *server) Check(ctx context.Context, req *pb.CheckRequest) (*pb.CheckResp
 
 	log.Printf("Headers %v", headers)
 	log.Printf("Path %v", path)
-
-	// conn, err := grpc.Dial("extauth:8080", grpc.WithInsecure())
-	// if err != nil {
-	// 	log.Fatalf("did not connect: %v", err)
-	// }
-	// defer conn.Close()
-	//
-	// c := pb.NewAuthorizationClient(conn)
 
 	resp, err := s.authClient.Check(ctx, req)
 	if err != nil {
@@ -65,87 +64,108 @@ func (s *server) Check(ctx context.Context, req *pb.CheckRequest) (*pb.CheckResp
 			req.Header.Add("cookie", cookieHeader)
 			if cookie, err := req.Cookie(AuthCookieName); err == nil {
 				token := cookie.Value
-				return s.authToken(ctx, token)
-			}
-		}
-	}
 
-	log.Println("Denied")
-	return &pb.CheckResponse{
-		Status: &rpc.Status{Code: int32(rpc.PERMISSION_DENIED)},
-		HttpResponse: &pb.CheckResponse_DeniedResponse{
-			DeniedResponse: &pb.DeniedHttpResponse{
-				Status: &envoytype.HttpStatus{Code: envoytype.StatusCode_Forbidden},
-				Body:   `{"msg": "denied"}`,
-			},
-		},
-	}, nil
-}
+				// here we have a jwt token that we know it is verified.
+				// ZBAM!
 
-func (s *server) authToken(ctx context.Context, token string) (*pb.CheckResponse, error) {
-	// here we have a jwt token that we know it is verified.
-	// ZBAM!
+				log.Printf("Token, %v", token)
 
-	var approved = true
+				client := resty.New()
 
-	log.Printf("Token, %v", token)
+				kcResp, err := client.R().
+					SetHeader("Content-Type", "application/x-www-form-urlencoded").
+					SetFormData(map[string]string{
+						"grant_type":    "client_credentials",
+						"client_id":     client_id,
+						"client_secret": client_secret,
+					}).
+					Post(keycloak_host + "/auth/realms/" + realm_name + "/protocol/openid-connect/token")
 
-	client_id := "test"
-	client_secret := "bc375223-9270-44dc-901f-0bc1450e3a2e"
-	keycloak_host := "https://keycloak.sololabs.dev"
-	realm_name := "k8s"
+				if err != nil {
+					log.Printf("Denied - Error, %v", err)
 
-	client := resty.New()
+					return &pb.CheckResponse{
+						Status: &rpc.Status{Code: int32(rpc.PERMISSION_DENIED)},
+					}, err
+				}
 
-	resp, err := client.R().
-		SetHeader("Content-Type", "application/x-www-form-urlencoded").
-		SetFormData(map[string]string{
-			"grant_type":    "client_credentials",
-			"client_id":     client_id,
-			"client_secret": client_secret,
-		}).
-		Post(keycloak_host + "/auth/realms/" + realm_name + "/protocol/openid-connect/token")
+				log.Printf("Keycloak Response Code, %v", kcResp.StatusCode())
+				log.Printf("Keycloak Body, %v", string(kcResp.Body()))
 
-	log.Printf("Keycloak Response Code, %v", resp.StatusCode())
-	log.Printf("Keycloak Body, %v", string(resp.Body()))
+				var jsClient struct {
+					AccessToken      string `json:"access_token"`
+					ExpiresIn        int32  `json:"expires_in"`
+					RefreshExpiresIn int32  `json:"refresh_expires_in"`
+					RefreshToken     string `json:"refresh_token"`
+					TokenType        string `json:"token_type"`
+					IdToken          string `json:"id_token"`
+					NotBeforePolicy  int32  `json:"not-before-policy"`
+					SessionState     string `json:"session_state"`
+				}
 
-	log.Printf("Keycloak Error, %v", err)
+				_ = json.Unmarshal(kcResp.Body(), &jsClient)
 
-	var foo struct {
-		AccessToken string `json:"access_token"`
-		RefreshToken string `json:"refresh_token"`
-	}
+				log.Printf("Path: %v", path)
 
-	json.Unmarshal(resp.Body(), &foo)
+				kcResp, err = client.R().
+					SetHeader("Authorization", "Bearer "+jsClient.AccessToken).
+					SetFormData(map[string]string{
+						"grant_type":    "urn:ietf:params:oauth:grant-type:uma-ticket",
+						"audience":      client_id,
+						"permission":    path,
+						"response_mode": "decision",
+					}).
+					Post(keycloak_host + "/auth/realms/" + realm_name + "/protocol/openid-connect/token")
 
-	log.Printf("Keycloak Access Token, %v", foo.AccessToken)
-	log.Printf("Keycloak Refresh Token, %v", foo.RefreshToken)
+				if err != nil {
+					log.Printf("Denied - Error, %v", err)
 
-	// keycloakClient := gocloak.NewClient("https://keycloak.sololabs.dev")
-	// _, err := keycloakClient.LoginClient("test", "bc375223-9270-44dc-901f-0bc1450e3a2e", "k8s")
-	// if err != nil {
-	// 	log.Fatalf("Error connecting to keycloak, %v", err)
-	// 	// return nil, err
-	// }
+					return &pb.CheckResponse{
+						Status: &rpc.Status{Code: int32(rpc.PERMISSION_DENIED)},
+					}, err
+				}
 
-	if approved {
-		log.Println("Approved")
-		return &pb.CheckResponse{
-			Status: &rpc.Status{Code: int32(rpc.OK)},
-			HttpResponse: &pb.CheckResponse_OkResponse{
-				OkResponse: &pb.OkHttpResponse{
-					Headers: []*core.HeaderValueOption{
-						{
-							Append: &types.BoolValue{Value: false},
-							Header: &core.HeaderValue{
-								Key:   "x-my-header",
-								Value: "some value from auth server",
+				log.Printf("Keycloak Response Code, %v", kcResp.StatusCode())
+				log.Printf("Keycloak Body, %v", string(kcResp.Body()))
+
+				var jsResult struct {
+					Result bool `json:"result"`
+				}
+
+				_ = json.Unmarshal(kcResp.Body(), &jsResult)
+
+				if jsResult.Result {
+					log.Println("Approved")
+					return &pb.CheckResponse{
+						Status: &rpc.Status{Code: int32(rpc.OK)},
+						HttpResponse: &pb.CheckResponse_OkResponse{
+							OkResponse: &pb.OkHttpResponse{
+								Headers: []*core.HeaderValueOption{
+									{
+										Append: &types.BoolValue{Value: false},
+										Header: &core.HeaderValue{
+											Key:   "x-my-header",
+											Value: "some value from auth server",
+										},
+									},
+								},
 							},
 						},
+					}, nil
+				}
+
+				log.Println("Denied")
+				return &pb.CheckResponse{
+					Status: &rpc.Status{Code: int32(rpc.PERMISSION_DENIED)},
+					HttpResponse: &pb.CheckResponse_DeniedResponse{
+						DeniedResponse: &pb.DeniedHttpResponse{
+							Status: &envoytype.HttpStatus{Code: envoytype.StatusCode_Forbidden},
+							Body:   `{"msg": "denied"}`,
+						},
 					},
-				},
-			},
-		}, nil
+				}, nil
+			}
+		}
 	}
 
 	log.Println("Denied")
