@@ -13,7 +13,7 @@ function print_error {
 trap print_error ERR
 
 CLIENT_ID='test'
-CLIENT_SECRET='6b278493-2769-4d0c-b828-a1991e9dfd4b'
+CLIENT_SECRET='bc375223-9270-44dc-901f-0bc1450e3a2e'
 
 ( cd auth_server_go_grpc; skaffold run )
 
@@ -55,7 +55,7 @@ glooctl create secret --namespace gloo-system \
 #   --oidc-auth-client-id "$CLIENT_ID" \
 #   --oidc-auth-client-secret-name keycloak \
 #   --oidc-auth-client-secret-namespace gloo-system \
-#   --oidc-auth-issuer-url 'http://keycloak.sololabs.dev/auth/realms/k8s/'
+#   --oidc-auth-issuer-url 'https://keycloak.sololabs.dev/auth/realms/k8s/'
 
 # kubectl --namespace gloo-system get virtualservice/default --output yaml > oidc-vs.yaml
 
@@ -90,7 +90,7 @@ spec:
               client_secret_ref:
                 name: keycloak
                 namespace: gloo-system
-              issuer_url: http://keycloak.sololabs.dev/auth/realms/k8s/
+              issuer_url: https://keycloak.sololabs.dev/auth/realms/k8s/
 EOF
 
 sleep 5

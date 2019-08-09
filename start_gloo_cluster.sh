@@ -9,7 +9,7 @@
 # Based on GlooE Custom Auth server example
 # https://gloo.solo.io/enterprise/authentication/custom_auth/
 
-K8S_TOOL=kind     # kind or minikube or gcloud
+K8S_TOOL=minikube     # kind or minikube or gcloud
 TILLER_MODE=local # local or cluster
 
 GLOO_VERSION=0.18.2
