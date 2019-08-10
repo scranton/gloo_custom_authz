@@ -9,10 +9,10 @@
 # Based on GlooE Custom Auth server example
 # https://gloo.solo.io/enterprise/authentication/custom_auth/
 
-K8S_TOOL=minikube     # kind or minikube or gcloud
+K8S_TOOL=kind     # kind or minikube or gcloud
 TILLER_MODE=local # local or cluster
 
-GLOO_VERSION=0.18.2
+GLOO_VERSION=0.18.6
 
 # GLOOE_LICENSE_KEY=
 
@@ -71,8 +71,11 @@ case "$K8S_TOOL" in
   gcloud)
     DEMO_CLUSTER_NAME="${DEMO_CLUSTER_NAME:-gke-scranton}"
 
-    gcloud container clusters delete "$DEMO_CLUSTER_NAME" && true # Ignore errors
-    gcloud container clusters create "$DEMO_CLUSTER_NAME" --machine-type "n1-standard-2" --num-nodes "4"
+    gcloud container clusters delete "$DEMO_CLUSTER_NAME" --quiet && true # Ignore errors
+    gcloud container clusters create "$DEMO_CLUSTER_NAME" \
+      --machine-type "n1-standard-1" \
+      --num-nodes "3" \
+      --labels=creator=scranton
 
     gcloud container clusters get-credentials "$DEMO_CLUSTER_NAME"
 
@@ -130,8 +133,8 @@ fi
 helm repo add glooe http://storage.googleapis.com/gloo-ee-helm
 helm upgrade --install glooe glooe/gloo-ee \
   --namespace gloo-system \
-  --version "${GLOO_VERSION:-0.18.2}" \
-  --set-string license_key=$GLOOE_LICENSE_KEY
+  --version "${GLOO_VERSION:-0.18.6}" \
+  --set-string license_key="$GLOOE_LICENSE_KEY"
 
 #
 # Deploy example applications

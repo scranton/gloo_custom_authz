@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+CLIENT_ID='test'
+CLIENT_SECRET='b464a18f-17ba-4a87-8c6d-d6b4397d6ad0'
+
 # Will exit script if we would use an uninitialised variable:
 set -o nounset
 # Will exit script when a simple command (not a control structure) fails:
@@ -12,10 +15,10 @@ function print_error {
 }
 trap print_error ERR
 
-CLIENT_ID='test'
-CLIENT_SECRET='bc375223-9270-44dc-901f-0bc1450e3a2e'
+# Get directory this script is located in to access script local files
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
-( cd auth_server_go_grpc; skaffold run )
+( cd "$SCRIPT_DIR"/auth_server_keycloak; skaffold run )
 
 # Patch Gloo Settings and default Virtual Service to reference custom auth service
 kubectl --namespace gloo-system patch settings default \
@@ -26,7 +29,7 @@ spec:
     configs:
       extauth:
         extauthzServerRef:
-          name: gloo-system-auth-server-8000
+          name: gloo-system-auth-server-keycloak-8000
           namespace: gloo-system
         requestBody:
           maxRequestBytes: 10240
