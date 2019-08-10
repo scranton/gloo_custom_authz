@@ -1,11 +1,5 @@
 FROM golang:1-alpine as builder
 
-# Create the user and group files that will be used in the running container to
-# run the process as an unprivileged user.
-RUN mkdir /user && \
-    echo 'nobody:x:65534:65534:nobody:/:' > /user/passwd && \
-    echo 'nobody:x:65534:' > /user/group
-
 # Install the Certificate-Authority certificates for the app to be able to make
 # calls to HTTPS endpoints.
 # Git is required for fetching the dependencies.
@@ -24,14 +18,11 @@ COPY . ./
 
 # Build the executable to `/app`. Mark the build as statically linked.
 RUN CGO_ENABLED=0 go build \
-    -installsuffix 'static' \
+    -gcflags "-N -l" \
     -o /app .
 
 # Final stage: the running container.
 FROM alpine as final
-
-# Import the user and group files from the first stage.
-COPY --from=builder /user/group /user/passwd /etc/
 
 # Import the Certificate-Authority certificates for enabling HTTPS.
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
@@ -44,8 +35,11 @@ COPY --from=builder /app /app
 # to ports below 1024.
 EXPOSE 8080
 
+# Create a group and user
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+
 # Perform any further action as an unprivileged user.
-USER nobody:nobody
+USER appuser
 
 # Run the compiled binary.
 ENTRYPOINT ["/app"]

@@ -1,0 +1,43 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: auth-server-keycloak
+  namespace: gloo-system
+  labels:
+    app: auth-server-keycloak
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: auth-server-keycloak
+  template:
+    metadata:
+      labels:
+        app: auth-server-keycloak
+    spec:
+      containers:
+      - name: auth-server-keycloak
+        image: quay.io/sololabs/auth-server-keycloak
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: PORT
+          value: "8000"
+        - name: EXTAUTH_ADDRESS
+          value: "extauth:8080"
+        - name: KEYCLOAK_CLIENT_ID
+          value: "test"
+        - name: KEYCLOAK_CLIENT_SECRET
+          value: "b464a18f-17ba-4a87-8c6d-d6b4397d6ad0"
+        - name: KEYCLOAK_BASE_URL
+          value: "https://keycloak.sololabs.dev"
+        - name: KEYCLOAK_REALM
+          value: "k8s"
+        ports:
+        - containerPort: 8000
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "250m"
+          limits:
+            memory: "128Mi"
+            cpu: "500m"
